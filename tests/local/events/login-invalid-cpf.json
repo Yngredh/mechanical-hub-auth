@@ -1,0 +1,11 @@
+{
+  "httpMethod": "POST",
+  "path": "/auth/login",
+  "headers": { "Content-Type": "application/json" },
+  "isBase64Encoded": false,
+  "body": "{\"cpf\":\"11111111111\",\"password\":\"qualquer-coisa\"}",
+  "requestContext": {
+    "requestId": "local-test-invalid-cpf",
+    "identity": { "sourceIp": "127.0.0.1" }
+  }
+}

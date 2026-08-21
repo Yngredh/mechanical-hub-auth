@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, testes e build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Testes com cobertura
+        # O limite de cobertura esta no vitest.config.ts; o job falha sozinho
+        # se a cobertura cair abaixo dele.
+        run: npm run test:coverage
+
+      - name: Build dos bundles
+        run: npm run build
+
+      - name: Empacotar funcoes
+        run: node scripts/package.mjs
+
+      - name: Publicar artefatos
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-bundles
+          path: build/*.zip
+          retention-days: 5
