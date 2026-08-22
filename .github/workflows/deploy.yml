@@ -1,0 +1,149 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente alvo
+        required: true
+        default: prod
+        type: choice
+        options: [prod]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Deploy nao roda em paralelo: dois `terraform apply` simultaneos disputam o
+  # mesmo estado.
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  TF_DIR: infra/terraform
+
+jobs:
+  build:
+    name: Build e empacotamento
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:coverage
+      - run: npm run build
+      - run: node scripts/package.mjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lambda-bundles
+          path: build/*.zip
+          retention-days: 5
+
+  deploy:
+    name: Provisionar e publicar
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: lambda-bundles
+          path: build
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # O AWS Academy Lab entrega credenciais temporarias (com session
+          # token) que expiram a cada sessao do laboratorio. Atualize os
+          # secrets do repositorio antes de rodar o deploy.
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_DIR }}
+        # A key do state e fixa no bloco backend; bucket e regiao vem daqui,
+        # para nao versionar o nome do bucket.
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="region=${{ env.AWS_REGION }}"
+
+      - name: Terraform validate
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform validate
+
+      - name: Terraform plan
+        working-directory: ${{ env.TF_DIR }}
+        env:
+          TF_VAR_lambda_execution_role_arn: ${{ secrets.LAB_ROLE_ARN }}
+          # Rede e endpoint do banco vem dos states remotos (ADR-0002), nao de
+          # secrets preenchidos a mao.
+          TF_VAR_infra_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_database_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+          TF_VAR_token_signing_key: ${{ secrets.TOKEN_SIGNING_KEY }}
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform apply
+        working-directory: ${{ env.TF_DIR }}
+        env:
+          TF_VAR_lambda_execution_role_arn: ${{ secrets.LAB_ROLE_ARN }}
+          # Rede e endpoint do banco vem dos states remotos (ADR-0002), nao de
+          # secrets preenchidos a mao.
+          TF_VAR_infra_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_database_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+          TF_VAR_token_signing_key: ${{ secrets.TOKEN_SIGNING_KEY }}
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Smoke test do login
+        working-directory: ${{ env.TF_DIR }}
+        env:
+          SMOKE_CPF: ${{ secrets.SMOKE_TEST_CPF }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+        run: |
+          LOGIN_URL="$(terraform output -raw login_url)"
+          echo "Login: ${LOGIN_URL}"
+
+          # 1) Credencial invalida deve responder 401 (prova que a funcao subiu
+          #    e alcanca o banco -- 500 aqui indicaria falha de conexao).
+          status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${LOGIN_URL}" \
+            -H 'Content-Type: application/json' \
+            -d '{"cpf":"52998224725","password":"senha-propositalmente-errada"}')
+          if [ "${status}" != "401" ] && [ "${status}" != "429" ]; then
+            echo "Esperado 401/429 para credencial invalida, recebido ${status}"
+            exit 1
+          fi
+
+          # 2) Credencial valida deve devolver token, se o secret estiver configurado.
+          if [ -n "${SMOKE_CPF}" ]; then
+            token=$(curl -s -X POST "${LOGIN_URL}" \
+              -H 'Content-Type: application/json' \
+              -d "{\"cpf\":\"${SMOKE_CPF}\",\"password\":\"${SMOKE_PASSWORD}\"}" \
+              | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')
+
+            if [ -z "${token}" ]; then
+              echo "Login com credencial valida nao devolveu accessToken"
+              exit 1
+            fi
+            echo "Login validado com sucesso"
+          fi

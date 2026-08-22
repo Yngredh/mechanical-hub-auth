@@ -1,0 +1,11 @@
+{
+  "httpMethod": "POST",
+  "path": "/auth/login",
+  "headers": { "Content-Type": "application/json" },
+  "isBase64Encoded": false,
+  "body": "{\"cpf\":\"529.982.247-25\",\"password\":\"troque-por-uma-senha-real-do-seed\"}",
+  "requestContext": {
+    "requestId": "local-test-request-id",
+    "identity": { "sourceIp": "127.0.0.1" }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "type": "REQUEST",
+  "methodArn": "arn:aws:execute-api:us-east-1:123456789012:abc123/prod/GET/mechanical-hub/service-orders/OS-2026-0001",
+  "path": "/mechanical-hub/service-orders/OS-2026-0001",
+  "httpMethod": "GET",
+  "headers": {},
+  "requestContext": { "requestId": "local-test-public-route" }
+}

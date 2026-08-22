@@ -1,0 +1,41 @@
+# Copie para terraform.tfvars e preencha. Nao versione o arquivo preenchido.
+#
+# Valores sensiveis (database_password, token_signing_key) devem vir de
+# secrets do repositorio no CI, via TF_VAR_*, e nao deste arquivo.
+
+aws_region  = "us-east-1"
+environment = "prod"
+
+# AWS Academy Lab: nao ha permissao para criar IAM role -- use a LabRole.
+lambda_execution_role_arn = "arn:aws:iam::123456789012:role/LabRole"
+
+# --- States remotos (ADR-0002) ------------------------------------------------
+# Rede e endpoint do banco sao lidos daqui, nao informados a mao. Pode ser o
+# mesmo bucket para os tres repositorios, com keys diferentes.
+infra_state_bucket    = "mechanical-hub-tfstate"
+database_state_bucket = "mechanical-hub-tfstate"
+# infra_state_key    = "mechanical-hub-infra/terraform.tfstate"     (default)
+# database_state_key = "mechanical-hub-database/terraform.tfstate"  (default)
+
+# --- Overrides opcionais ------------------------------------------------------
+# Deixe comentado para usar os valores dos states. Preencha apenas para apontar
+# para um ambiente avulso ou destravar um deploy com state indisponivel.
+#
+# vpc_id                = "vpc-0123456789abcdef0"
+# vpc_subnet_ids        = ["subnet-aaaa1111", "subnet-bbbb2222"]
+# database_host         = "mechanical-hub.abcdefghijkl.us-east-1.rds.amazonaws.com"
+# database_port         = 5432
+# database_name         = "mechanical_hub"
+# database_egress_cidrs = ["10.0.0.0/16"]
+
+# O security group das funcoes e criado por este repositorio (ADR-0002) --
+# nao ha mais variavel vpc_security_group_ids.
+
+# Usuario de banco somente-leitura. A role e criada pelo mechanical-hub-database
+# (sql/auth-database-role.sql); a senha precisa ser a mesma do AUTH_DB_PASSWORD
+# daquele repositorio.
+database_user = "mechanical_hub_auth"
+# database_password  -> TF_VAR_database_password
+# token_signing_key  -> TF_VAR_token_signing_key
+
+application_base_url = "http://internal-mechanical-hub-alb-1234567890.us-east-1.elb.amazonaws.com"

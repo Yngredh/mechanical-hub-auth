@@ -1,0 +1,8 @@
+{
+  "type": "REQUEST",
+  "methodArn": "arn:aws:execute-api:us-east-1:123456789012:abc123/prod/GET/service-orders",
+  "path": "/service-orders",
+  "httpMethod": "GET",
+  "headers": {},
+  "requestContext": { "requestId": "local-test-missing-token" }
+}
