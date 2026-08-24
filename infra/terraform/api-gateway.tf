@@ -269,3 +269,20 @@ resource "aws_api_gateway_method_settings" "login_throttle" {
     metrics_enabled        = true
   }
 }
+
+access_log_settings {
+  destination_arn = aws_cloudwatch_log_group.api_gateway.arn
+  format = jsonencode({
+    requestId = "$context.requestId"
+    ip = "$context.identity.sourceIp"
+    requestTime = "$context.requestTime"
+    httpMethod = "$context.httpMethod"
+    routeKey = "$context.routeKey"
+    status = "$context.status"
+    protocol = "$context.protocol"
+    responseLength = "$context.responseLength"
+    integrationLatency = "$context.integration.latency"
+    error = "$context.error.messageString"
+    errorType = "$context.error.responseType"
+  })
+}
