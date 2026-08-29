@@ -72,3 +72,37 @@ resource "aws_security_group_rule" "lambda_https_egress" {
   protocol    = "tcp"
   cidr_blocks = local.database_egress_cidrs
 }
+
+# =============================================================================
+# Saida para o coletor OpenTelemetry (RFC-0004, etapa 3)
+#
+# O coletor esta no cluster, alcancavel de dentro da VPC por um listener no NLB
+# interno (mechanical-hub-infra, modules/app-lb). Sem esta regra o egress do
+# security group barra a conexao e toda exportacao termina em timeout — falha
+# silenciosa: o login continua funcionando e os paineis simplesmente ficam
+# vazios.
+#
+# A porta e derivada do proprio endereco resolvido, e nao de uma variavel
+# separada: assim ela nao tem como divergir do que o infra publicou.
+# =============================================================================
+
+locals {
+  # `try` com fallback para a porta OTLP padrao: um endereco informado a mao sem
+  # porta explicita nao pode quebrar o apply com erro de indice.
+  otlp_port = local.telemetry_enabled ? try(
+    tonumber(regex(":(\\d+)$", local.otlp_endpoint)[0]), 4318
+  ) : null
+}
+
+resource "aws_security_group_rule" "lambda_to_otlp_collector" {
+  count = local.telemetry_enabled ? 1 : 0
+
+  security_group_id = aws_security_group.lambda.id
+  type              = "egress"
+  description       = "OTLP/HTTP para o coletor OpenTelemetry, via NLB interno"
+
+  from_port   = local.otlp_port
+  to_port     = local.otlp_port
+  protocol    = "tcp"
+  cidr_blocks = local.database_egress_cidrs
+}

@@ -210,3 +210,54 @@ variable "login_throttle_burst" {
   type        = number
   default     = 40
 }
+
+# --- Observabilidade (RFC-0004, etapa 3) --------------------------------------
+
+variable "otlp_endpoint" {
+  description = <<-EOT
+    Override do endereco OTLP/HTTP do coletor OpenTelemetry.
+
+    Vazio resolve pelo output `otlp_vpc_endpoint` do state do
+    mechanical-hub-infra -- um listener no NLB interno, alcancavel de dentro da
+    VPC. As funcoes rodam na VPC mas fora do Kubernetes, entao nao podem usar o
+    DNS do cluster.
+
+    Se nem o override nem o output existirem, a telemetria fica desligada: as
+    funcoes sobem normalmente e apenas nao exportam nada.
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "otlp_export_timeout_ms" {
+  description = <<-EOT
+    Prazo do envio de telemetria ao coletor.
+
+    Entra no tempo de resposta da requisicao, porque a Lambda congela a execucao
+    assim que responde e o envio precisa terminar antes disso. Curto de
+    proposito: vale perder a telemetria de uma invocacao, nao atrasar o login.
+  EOT
+  type        = number
+  default     = 1500
+}
+
+variable "authorizer_in_vpc" {
+  description = <<-EOT
+    Coloca o autorizador dentro da VPC para que ele alcance o coletor.
+
+    Ele ficava fora por causa de cold start. Esse custo caiu muito desde as ENIs
+    Hyperplane (a AWS mediu ~14,8s para ~933ms no anuncio de 2019), o que torna
+    a troca aceitavel em troca das metricas de autorizacao -- que sao invocadas
+    em toda requisicao protegida e hoje nao aparecem em painel nenhum.
+
+    O caso de borda que sobra: a AWS documenta que funcoes ociosas por semanas
+    podem ter os recursos Hyperplane recuperados e voltar a sofrer cold start
+    mais longo -- plausivel num laboratorio parado entre sessoes. Com false, o
+    autorizador volta para fora da VPC e perde so a exportacao; o log continua
+    indo para o CloudWatch.
+
+    Sem efeito quando nao ha coletor configurado.
+  EOT
+  type        = bool
+  default     = true
+}

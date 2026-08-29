@@ -6,6 +6,7 @@ import {
   FakePasswordVerifier,
   FakeTokenService,
   FakeUserRepository,
+  RecordingTelemetry,
   silentLogger,
   userFixture,
 } from '../support/fakes.js';
@@ -28,6 +29,7 @@ function deps(overrides = {}) {
     tokens: new FakeTokenService(),
     limiter: new FakeAttemptLimiter(),
     logger: silentLogger(),
+    telemetry: new RecordingTelemetry(),
     ...overrides,
   };
 }

@@ -39,3 +39,16 @@ database_user = "mechanical_hub_auth"
 # token_signing_key  -> TF_VAR_token_signing_key
 
 application_base_url = "http://internal-mechanical-hub-alb-1234567890.us-east-1.elb.amazonaws.com"
+
+# --- Observabilidade (RFC-0004, etapa 3) --------------------------------------
+#
+# Por padrao nao ha nada a preencher: o endereco do coletor vem do output
+# `otlp_vpc_endpoint` do state do mechanical-hub-infra. Sem ele (observabilidade
+# desligada la, ou state anterior a etapa 1), as funcoes sobem sem exportar.
+#
+# otlp_endpoint          = "http://internal-...elb.amazonaws.com:30318"
+# otlp_export_timeout_ms = 1500
+#
+# O autorizador entra na VPC para alcancar o coletor. Ver a descricao da
+# variavel para o custo dessa troca; false devolve o comportamento anterior.
+# authorizer_in_vpc = true

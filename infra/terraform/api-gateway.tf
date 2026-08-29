@@ -253,6 +253,31 @@ resource "aws_api_gateway_stage" "this" {
   deployment_id = aws_api_gateway_deployment.this.id
   stage_name    = var.environment
 
+  # `integrationLatency` separado de `responseLatency` responde a primeira
+  # pergunta de toda reclamacao de lentidao: demorou no backend ou no Gateway?
+  # `authorizerError` mostra a falha do autorizador, que de outro modo so
+  # apareceria como um 500 sem explicacao.
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_gateway.arn
+
+    format = jsonencode({
+      requestId          = "$context.requestId"
+      ip                 = "$context.identity.sourceIp"
+      requestTime        = "$context.requestTime"
+      httpMethod         = "$context.httpMethod"
+      path               = "$context.path"
+      status             = "$context.status"
+      protocol           = "$context.protocol"
+      responseLength     = "$context.responseLength"
+      responseLatency    = "$context.responseLatency"
+      integrationLatency = "$context.integration.latency"
+      integrationStatus  = "$context.integration.status"
+      authorizerError    = "$context.authorizer.error"
+      error              = "$context.error.messageString"
+      errorType          = "$context.error.responseType"
+    })
+  }
+
   tags = local.common_tags
 }
 
@@ -270,19 +295,19 @@ resource "aws_api_gateway_method_settings" "login_throttle" {
   }
 }
 
-access_log_settings {
-  destination_arn = aws_cloudwatch_log_group.api_gateway.arn
-  format = jsonencode({
-    requestId = "$context.requestId"
-    ip = "$context.identity.sourceIp"
-    requestTime = "$context.requestTime"
-    httpMethod = "$context.httpMethod"
-    routeKey = "$context.routeKey"
-    status = "$context.status"
-    protocol = "$context.protocol"
-    responseLength = "$context.responseLength"
-    integrationLatency = "$context.integration.latency"
-    error = "$context.error.messageString"
-    errorType = "$context.error.responseType"
-  })
+# =============================================================================
+# Logs do API Gateway
+#
+# Preenche o unico trecho do caminho que nao tinha visibilidade nenhuma: o que
+# acontece ANTES da requisicao chegar na funcao ou na aplicacao. Sem isto, um
+# 500 gerado pelo proprio Gateway — integracao inalcancavel, autorizador que
+# estourou — aparecia so como "Internal server error" no corpo da resposta, e o
+# diagnostico dependia de reproduzir na mao pelo CLI. Foi exatamente o que
+# aconteceu no incidente do VPC Link.
+# =============================================================================
+
+resource "aws_cloudwatch_log_group" "api_gateway" {
+  name              = "/aws/apigateway/${local.name_prefix}"
+  retention_in_days = var.log_retention_days
+  tags              = local.common_tags
 }
