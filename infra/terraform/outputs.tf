@@ -52,3 +52,34 @@ output "resolved_app_backend_url" {
   description = "URL do NLB interno da aplicacao, resolvida do state de mechanical-hub-infra."
   value       = local.application_base_url
 }
+
+# --- Observabilidade (RFC-0004, etapa 3) --------------------------------------
+
+output "telemetry_enabled" {
+  description = <<-EOT
+    Se as funcoes estao exportando telemetria. Falso significa que nao ha
+    coletor alcancavel — as funcoes sobem e funcionam, apenas sem metricas nem
+    rastros no Grafana. Vale conferir isto no resumo do apply antes de concluir
+    que um painel vazio e problema de painel.
+  EOT
+  value       = local.telemetry_enabled
+}
+
+output "otlp_endpoint" {
+  description = "Endereco OTLP/HTTP em uso pelas funcoes, resolvido do state de infra ou do override."
+  value       = local.telemetry_enabled ? local.otlp_endpoint : null
+}
+
+output "authorizer_in_vpc" {
+  description = <<-EOT
+    Se o autorizador foi colocado na VPC. Fora dela ele nao alcanca o coletor e
+    a serie mechanical_hub_auth_authorizer_total nao e publicada — o painel de
+    decisoes do autorizador fica vazio, sem erro em lugar nenhum.
+  EOT
+  value       = local.authorizer_in_vpc
+}
+
+output "api_gateway_log_group" {
+  description = "Log group com o log de acesso do API Gateway — o unico lugar onde aparece o que o Gateway recusou antes de chegar na funcao."
+  value       = aws_cloudwatch_log_group.api_gateway.name
+}

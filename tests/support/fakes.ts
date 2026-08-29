@@ -8,6 +8,13 @@ import type {
   TokenService,
   TokenVerificationResult,
 } from '../../src/core/ports/token-service.js';
+import type {
+  MetricAttributes,
+  Span,
+  SpanOptions,
+  Telemetry,
+  TraceContext,
+} from '../../src/core/ports/telemetry.js';
 import type { UserRepository } from '../../src/core/ports/user-repository.js';
 
 export function silentLogger(): Logger {
@@ -91,5 +98,51 @@ export class FakeAttemptLimiter implements AttemptLimiter {
 
   async reset(): Promise<void> {
     this.resets += 1;
+  }
+}
+
+/**
+ * Telemetria de teste: guarda o que foi contado em vez de exportar.
+ *
+ * O controlador e os handlers passaram a exigir esta porta, entao ela precisa
+ * existir em qualquer construcao de dependencias — inclusive nos testes que nao
+ * se importam com metrica.
+ */
+export class RecordingTelemetry implements Telemetry {
+  readonly counters: Array<{ name: string; attributes: MetricAttributes; value: number }> = [];
+  readonly spans: Array<{ name: string; context: TraceContext; error?: string }> = [];
+  flushes = 0;
+
+  increment(name: string, attributes: MetricAttributes = {}, value = 1): void {
+    this.counters.push({ name, attributes, value });
+  }
+
+  startSpan(options: SpanOptions, parent?: TraceContext): Span {
+    const context: TraceContext = {
+      traceId: parent?.traceId ?? 'a'.repeat(32),
+      spanId: 'b'.repeat(16),
+      sampled: parent?.sampled ?? true,
+    };
+
+    const spans = this.spans;
+
+    return {
+      context,
+      end(outcome): void {
+        spans.push({ name: options.name, context, error: outcome?.error });
+      },
+    };
+  }
+
+  async flush(): Promise<void> {
+    this.flushes += 1;
+  }
+
+  /** Total contado sob um nome, opcionalmente filtrando por uma etiqueta. */
+  totalFor(name: string, attribute?: readonly [string, string]): number {
+    return this.counters
+      .filter((counter) => counter.name === name)
+      .filter((counter) => attribute === undefined || counter.attributes[attribute[0]] === attribute[1])
+      .reduce((sum, counter) => sum + counter.value, 0);
   }
 }

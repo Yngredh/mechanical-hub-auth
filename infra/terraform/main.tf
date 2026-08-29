@@ -113,6 +113,51 @@ locals {
     SERVICE_NAME      = "${var.project_name}-auth"
     LOG_LEVEL         = "info"
   }
+
+  # --- Telemetria (RFC-0004, etapa 3) ---------------------------------------
+  #
+  # O coletor OpenTelemetry roda no cluster; as funcoes rodam na VPC mas FORA do
+  # Kubernetes, e nao resolvem o DNS interno nem alcancam um Service ClusterIP.
+  # O mechanical-hub-infra publica no output abaixo um endereco que funciona de
+  # dentro da VPC: um listener no mesmo NLB interno que ja atende a aplicacao,
+  # apontando para o NodePort do coletor.
+  #
+  # `try` porque o output nao existe em states aplicados antes da etapa 1, e e
+  # nulo quando a observabilidade esta desligada la. Nos dois casos a telemetria
+  # apenas nao liga, em vez de quebrar o apply.
+  otlp_endpoint_resolved = var.otlp_endpoint != "" ? var.otlp_endpoint : try(
+    data.terraform_remote_state.infra.outputs.otlp_vpc_endpoint, ""
+  )
+
+  otlp_endpoint     = local.otlp_endpoint_resolved == null ? "" : local.otlp_endpoint_resolved
+  telemetry_enabled = local.otlp_endpoint != ""
+
+  # Sem coletor, o codigo trata endereco ausente como telemetria desligada e o
+  # adaptador vira no-op -- nao tenta exportar para lugar nenhum.
+  telemetry_environment = local.telemetry_enabled ? {
+    OTEL_EXPORTER_OTLP_ENDPOINT = local.otlp_endpoint
+    OTEL_ENABLED                = "true"
+    OTEL_EXPORT_TIMEOUT_MS      = tostring(var.otlp_export_timeout_ms)
+    ENVIRONMENT                 = var.environment
+    } : {
+    OTEL_ENABLED = "false"
+    ENVIRONMENT  = var.environment
+  }
+
+  # O autorizador so entra na VPC quando precisa alcancar o coletor.
+  #
+  # Ele foi mantido fora dela de proposito ate aqui, e a justificativa era cold
+  # start. Esse custo caiu muito desde as ENIs Hyperplane -- a propria AWS
+  # mediu ~14,8s para ~933ms no anuncio de 2019 --, o que torna a troca
+  # aceitavel em troca das metricas de autorizacao. O que sobra e um caso de
+  # borda documentado pela AWS: funcoes ociosas por semanas podem ter os
+  # recursos Hyperplane recuperados e voltar a sofrer cold start mais longo,
+  # cenario plausivel num laboratorio que fica parado.
+  #
+  # Por isso e variavel, e nao decisao fixa: com var.authorizer_in_vpc = false
+  # o autorizador volta a ficar fora da VPC e perde apenas a exportacao -- o
+  # log continua indo para o CloudWatch.
+  authorizer_in_vpc = local.telemetry_enabled && var.authorizer_in_vpc
 }
 
 # =============================================================================
@@ -141,7 +186,7 @@ resource "aws_lambda_function" "authenticate" {
   }
 
   environment {
-    variables = merge(local.token_environment, {
+    variables = merge(local.token_environment, local.telemetry_environment, {
       DATABASE_HOST     = local.database_host
       DATABASE_PORT     = tostring(local.database_port)
       DATABASE_NAME     = local.database_name
@@ -170,13 +215,23 @@ resource "aws_lambda_function" "authorize" {
   filename         = "${path.module}/../../build/authorize.zip"
   source_code_hash = filebase64sha256("${path.module}/../../build/authorize.zip")
 
-  # Nao fala com o banco, entao nao entra na VPC: fora dela o cold start e
-  # menor e nao consome ENI.
   memory_size = 256
   timeout     = 10
 
+  # Historicamente ficava fora da VPC (nao fala com o banco). Passa a entrar
+  # apenas quando ha coletor para alcancar -- ver o local authorizer_in_vpc,
+  # que documenta o custo dessa troca e como reverte-la.
+  dynamic "vpc_config" {
+    for_each = local.authorizer_in_vpc ? [1] : []
+
+    content {
+      subnet_ids         = local.subnet_ids
+      security_group_ids = [aws_security_group.lambda.id]
+    }
+  }
+
   environment {
-    variables = local.token_environment
+    variables = merge(local.token_environment, local.telemetry_environment)
   }
 
   tags = merge(local.common_tags, { Function = "authorize" })
