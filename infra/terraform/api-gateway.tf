@@ -248,10 +248,15 @@ resource "aws_api_gateway_deployment" "this" {
   }
 }
 
+resource "aws_api_gateway_account" "this" {
+  cloudwatch_role_arn = var.lambda_execution_role_arn
+}
+
 resource "aws_api_gateway_stage" "this" {
   rest_api_id   = aws_api_gateway_rest_api.this.id
   deployment_id = aws_api_gateway_deployment.this.id
   stage_name    = var.environment
+  depends_on = [aws_api_gateway_account.this]
 
   # `integrationLatency` separado de `responseLatency` responde a primeira
   # pergunta de toda reclamacao de lentidao: demorou no backend ou no Gateway?
