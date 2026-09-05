@@ -204,7 +204,7 @@ Este repositório **lê os states remotos** dos dois que vêm antes dele na orde
 | `mechanical-hub-infra` | `app_nlb_arn`, `app_backend_base_url` | Alvo do VPC Link (`aws_api_gateway_vpc_link`) e `uri` das integrações `HTTP_PROXY` |
 | `mechanical-hub-database` | `rds_endpoint`, `rds_port`, `rds_db_name` | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME` |
 
-Ordem obrigatória: `infra` → `database` → **`auth`** → `mechanical-hub`.
+Ordem de **dependência de state**: `infra` → `database` → **`auth`** → `mechanical-hub`.
 
 **Sobre `app_nlb_arn`/`app_backend_base_url`:** ao contrário dos demais outputs de `infra`, este não depende do `mechanical-hub` já ter feito deploy — o NLB é provisionado pelo `mechanical-hub-infra` (não pelo Kubernetes) e existe assim que `infra` aplica, ainda que sem alvos saudáveis no target group até a aplicação subir. Por isso o `terraform apply` deste repositório nunca fica bloqueado esperando o `mechanical-hub`.
 

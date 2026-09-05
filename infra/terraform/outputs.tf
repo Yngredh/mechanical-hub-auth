@@ -26,7 +26,7 @@ output "lambda_security_group_id" {
 }
 
 output "vpc_link_id" {
-  description = "VPC Link usado pelas integracoes privadas do API Gateway ate o NLB da aplicacao (item 47)."
+  description = "VPC Link usado pelas integracoes privadas do API Gateway ate o NLB da aplicacao."
   value       = aws_api_gateway_vpc_link.app.id
 }
 

@@ -18,7 +18,6 @@ describe('resolveAccess — rotas publicas', () => {
 
 describe('resolveAccess — rotas exclusivas do administrador', () => {
   it.each([
-    '/auth/register',
     '/users',
     '/users/11111111-1111-4111-8111-111111111111',
     '/customers/1',
@@ -57,12 +56,21 @@ describe('resolveAccess — ordens de servico', () => {
 });
 
 describe('resolveAccess — default deny', () => {
-  it.each(['/rota-inexistente', '/admin', '/', '/auth'])('%s cai em UNKNOWN_ROUTE', (path) => {
+  it.each(['/rota-inexistente', '/admin', '/', '/auth', '/auth/register'])('%s cai em UNKNOWN_ROUTE', (path) => {
     expect(resolveAccess(path, 'GET').kind).toBe('UNKNOWN_ROUTE');
   });
 
   it('metodo fora da regra nao herda a permissao', () => {
     expect(resolveAccess('/auth/login', 'GET').kind).toBe('UNKNOWN_ROUTE');
+  });
+
+  it('o cadastro de funcionario mora em /users/register, nao em /auth/register', () => {
+    const decision = resolveAccess('/users/register', 'POST');
+
+    expect(decision.kind).toBe('REQUIRES_ROLE');
+    if (decision.kind === 'REQUIRES_ROLE') {
+      expect(decision.roles).toEqual(['ADMINISTRATOR']);
+    }
   });
 });
 
