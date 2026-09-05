@@ -20,7 +20,55 @@ Quem autentica são **funcionários da oficina** (mecânicos e administradores).
 
 ---
 
-## Portabilidade
+## 🛠️ Tecnologias
+
+| Camada | Tecnologia |
+|---|---|
+| Linguagem | TypeScript 5.5 |
+| Runtime | Node.js 20.x (`nodejs20.x` na AWS Lambda) |
+| Autenticação/hash | `jsonwebtoken` (JWT HS256) + `bcryptjs` |
+| Banco de dados | `pg` (cliente PostgreSQL puro, sem ORM) |
+| Segredos | Variável de ambiente (lab) ou `@aws-sdk/client-secrets-manager` (produção) |
+| Bundler | esbuild |
+| Testes | Vitest + `@vitest/coverage-v8` (mínimo 80% de cobertura) |
+| IaC | Terraform >= 1.5, provider AWS ~> 5.0 |
+| Nuvem | AWS Lambda + API Gateway (REST) |
+| CI/CD | GitHub Actions |
+
+---
+
+## 🏗️ Arquitetura deste repositório
+
+Recursos provisionados aqui (Terraform em `infra/terraform/`) e como eles se conectam ao que os outros repositórios provisionam:
+
+![Diagrama da Arquitetura Alto Nível da Fase 3](mechanical-hub-diagram.png)
+
+```mermaid
+flowchart LR
+    CLI["Funcionário da oficina"]
+
+    subgraph GW["API Gateway — recursos deste repositório"]
+        LOGIN["/auth/login · POST"]
+        AUTHZ["REQUEST Authorizer"]
+        PROXY["rotas protegidas · {proxy+}"]
+    end
+
+    LAUTH["Lambda authenticate"]
+    LAZ["Lambda authorize"]
+    SG["Security group deste repositório<br/>egress 5432 por CIDR"]
+    RDS[("RDS PostgreSQL<br/>provisionado em mechanical-hub-database")]
+    NLB["NLB interno<br/>provisionado em mechanical-hub-infra"]
+
+    CLI -->|"POST /auth/login"| LOGIN --> LAUTH -->|"SELECT users, profiles"| SG --> RDS
+    CLI -->|"requisição com Bearer"| PROXY --> AUTHZ --> LAZ -->|"Allow/Deny + claims"| AUTHZ
+    AUTHZ -->|"HTTP_PROXY via VPC Link"| NLB
+```
+
+O desenho completo da plataforma (as quatro repositórios, nuvem, banco e observabilidade) está em `docs/ARCHITECTURE.md` no repositório `mechanical-hub`.
+
+---
+
+## Arquitetura do código
 
 O código é dividido em três camadas, e a dependência aponta sempre para dentro:
 
@@ -105,6 +153,8 @@ npm run package           # zips em build/
 | Falha interna | 500 | `INTERNAL_ERROR` |
 
 > CPF inexistente e senha errada devolvem a mesma resposta, e ambos passam pelo mesmo custo de tempo (comparação BCrypt descartável). Sem isso seria possível descobrir quais CPFs estão cadastrados medindo latência.
+
+**Swagger/Postman:** este repositório não expõe uma API CRUD — apenas os dois contratos acima (`POST /auth/login` e o Authorizer). Não há Swagger próprio; o Swagger da plataforma é o da aplicação principal (`mechanical-hub`, ver o README daquele repositório). Os exemplos de request/response desta seção podem ser colados diretamente em Postman/Insomnia.
 
 ### Claims do token
 
@@ -204,7 +254,7 @@ Este repositório **lê os states remotos** dos dois que vêm antes dele na orde
 | `mechanical-hub-infra` | `app_nlb_arn`, `app_backend_base_url` | Alvo do VPC Link (`aws_api_gateway_vpc_link`) e `uri` das integrações `HTTP_PROXY` |
 | `mechanical-hub-database` | `rds_endpoint`, `rds_port`, `rds_db_name` | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME` |
 
-Ordem obrigatória: `infra` → `database` → **`auth`** → `mechanical-hub`.
+Ordem de **dependência de state**: `infra` → `database` → **`auth`** → `mechanical-hub`.
 
 **Sobre `app_nlb_arn`/`app_backend_base_url`:** ao contrário dos demais outputs de `infra`, este não depende do `mechanical-hub` já ter feito deploy — o NLB é provisionado pelo `mechanical-hub-infra` (não pelo Kubernetes) e existe assim que `infra` aplica, ainda que sem alvos saudáveis no target group até a aplicação subir. Por isso o `terraform apply` deste repositório nunca fica bloqueado esperando o `mechanical-hub`.
 

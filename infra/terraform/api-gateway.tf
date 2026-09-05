@@ -49,7 +49,7 @@ resource "aws_api_gateway_authorizer" "token" {
 # -----------------------------------------------------------------------------
 # Conectividade privada ate a aplicacao principal
 #
-# Fecha o item 47 do plano: o Service da aplicacao nao tem mais IP publico
+# Conectividade privada: o Service da aplicacao nao tem mais IP publico
 # (ver mechanical-hub/src/main/resources/k8s/service-app.yaml). As integracoes
 # HTTP_PROXY abaixo alcancam o NLB interno provisionado pelo
 # mechanical-hub-infra atraves deste VPC Link, em vez de um hostname publico.
@@ -57,7 +57,7 @@ resource "aws_api_gateway_authorizer" "token" {
 
 resource "aws_api_gateway_vpc_link" "app" {
   name        = "${local.name_prefix}-vpc-link"
-  description = "Conectividade privada ate o NLB interno da aplicacao principal (item 47)."
+  description = "Conectividade privada ate o NLB interno da aplicacao principal (adendo da ADR-0003)."
   target_arns = [local.app_nlb_arn]
 }
 

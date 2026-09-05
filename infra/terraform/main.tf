@@ -92,7 +92,7 @@ locals {
   # (modules/app-lb) -- nao pelo Kubernetes. O AWS Load Balancer Controller
   # exigiria IRSA (IAM role nova via provedor OIDC), bloqueado no AWS Academy
   # Lab. Sem override aqui: ao contrario de rede/banco, este valor nao existia
-  # antes do item 47 (era secret preenchido a mao) e sempre esta disponivel
+  # antes da conectividade privada (era secret preenchido a mao) e sempre esta disponivel
   # assim que o mechanical-hub-infra aplica -- nao depende do deploy da
   # aplicacao ter rodado.
   app_nlb_arn          = data.terraform_remote_state.infra.outputs.app_nlb_arn

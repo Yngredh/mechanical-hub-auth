@@ -65,7 +65,8 @@ export const ACCESS_RULES: readonly AccessRule[] = [
   },
 
   // --- Exclusivas do administrador ----------------------------------------
-  { path: '/auth/register', methods: '*', allow: ['ADMINISTRATOR'], description: 'Cadastro de funcionario' },
+  // O cadastro de funcionario e POST /users/register na aplicacao, ja coberto por
+  // /users/** — nao existe /auth/register.
   { path: '/users/**', methods: '*', allow: ['ADMINISTRATOR'], description: 'Gestao de funcionarios' },
   { path: '/users', methods: '*', allow: ['ADMINISTRATOR'], description: 'Gestao de funcionarios' },
   { path: '/customers/**', methods: '*', allow: ['ADMINISTRATOR'], description: 'Clientes' },
