@@ -145,7 +145,7 @@ resource "aws_api_gateway_integration" "public_any" {
 
   type                    = "HTTP_PROXY"
   integration_http_method = "ANY"
-  uri                     = "${local.application_base_url}/${each.value}/{proxy}"
+  uri                     = "${local.app_backend_base_urls["orders"]}/${each.value}/{proxy}"
 
   connection_type = "VPC_LINK"
   connection_id   = aws_api_gateway_vpc_link.app.id
@@ -185,7 +185,7 @@ resource "aws_api_gateway_integration" "protected_any" {
 
   type                    = "HTTP_PROXY"
   integration_http_method = "ANY"
-  uri                     = "${local.application_base_url}/{proxy}"
+  uri                     = "${local.app_backend_base_urls["orders"]}/{proxy}"
 
   connection_type = "VPC_LINK"
   connection_id   = aws_api_gateway_vpc_link.app.id
@@ -256,7 +256,7 @@ resource "aws_api_gateway_stage" "this" {
   rest_api_id   = aws_api_gateway_rest_api.this.id
   deployment_id = aws_api_gateway_deployment.this.id
   stage_name    = var.environment
-  depends_on = [aws_api_gateway_account.this]
+  depends_on    = [aws_api_gateway_account.this]
 
   # `integrationLatency` separado de `responseLatency` responde a primeira
   # pergunta de toda reclamacao de lentidao: demorou no backend ou no Gateway?

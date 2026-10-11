@@ -63,6 +63,14 @@ variable "state_region" {
   default     = ""
 }
 
+# --- Rotas --------------------------------------------------------------------
+
+variable "expose_orchestrator_transaction" {
+  description = "Expoe GET /transaction/{orderId} do orchestrator no API Gateway (somente ADMINISTRATOR). Ligar apenas quando o endpoint opcional existir no servico."
+  type        = bool
+  default     = false
+}
+
 # --- Rede ---------------------------------------------------------------------
 #
 # Overrides opcionais. Vazio = resolve pelo state remoto (comportamento padrao).

@@ -95,8 +95,44 @@ locals {
   # antes da conectividade privada (era secret preenchido a mao) e sempre esta disponivel
   # assim que o mechanical-hub-infra aplica -- nao depende do deploy da
   # aplicacao ter rodado.
-  app_nlb_arn          = data.terraform_remote_state.infra.outputs.app_nlb_arn
-  application_base_url = data.terraform_remote_state.infra.outputs.app_backend_base_url
+  #
+  # Fase 4: o NLB continua um so (um VPC Link), mas com um listener por
+  # servico. app_backend_base_urls e o mapa servico -> URL base
+  # (orders, stock, billing, orchestrator), contrato da secao 3 da spec do infra.
+  app_nlb_arn           = data.terraform_remote_state.infra.outputs.app_nlb_arn
+  app_backend_base_urls = data.terraform_remote_state.infra.outputs.app_backend_base_urls
+
+  # --- Rotas encaminhadas aos servicos (Fase 4) ------------------------------
+  #
+  # Chave: caminho no API Gateway, sem barra inicial e com no maximo dois
+  # segmentos. Todos os recursos, metodos e integracoes do api-gateway.tf saem
+  # deste mapa; rota fora dele nao existe no gateway e recebe a resposta padrao
+  # dele (negacao por padrao, igual a matriz de acesso).
+  #
+  #   service         -> chave em app_backend_base_urls
+  #   method          -> metodo HTTP no gateway (ANY para os {proxy+})
+  #   public          -> true: sem autorizador; false: autorizador + x-user-*
+  #   forward_headers -> cabecalhos repassados explicitamente a integracao
+  #
+  # /mechanical-hub e /webhooks sao publicos de proposito: o cliente final se
+  # autentica pelo token de aprovacao (validado no orders) e o Mercado Pago pela
+  # assinatura x-signature (validada no billing).
+  routes = merge(
+    {
+      "mechanical-hub/{proxy+}" = { service = "orders", method = "ANY", public = true, forward_headers = [] }
+      "orders"                  = { service = "orders", method = "ANY", public = false, forward_headers = [] }
+      "orders/{proxy+}"         = { service = "orders", method = "ANY", public = false, forward_headers = [] }
+      "services"                = { service = "orders", method = "GET", public = false, forward_headers = [] }
+      "stock"                   = { service = "stock", method = "ANY", public = false, forward_headers = [] }
+      "stock/{proxy+}"          = { service = "stock", method = "ANY", public = false, forward_headers = [] }
+      "webhooks/payment"        = { service = "billing", method = "POST", public = true, forward_headers = ["x-signature", "x-request-id"] }
+    },
+    # Endpoint opcional do orquestrador (depuracao e demonstracao). So entra
+    # no gateway quando o servico de fato o expoe.
+    var.expose_orchestrator_transaction ? {
+      "transaction/{orderId}" = { service = "orchestrator", method = "GET", public = false, forward_headers = [] }
+    } : {},
+  )
 
   # Configuracao comum as duas funcoes.
   #

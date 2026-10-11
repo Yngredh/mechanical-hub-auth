@@ -48,9 +48,9 @@ output "resolved_database_host" {
   value       = local.database_host
 }
 
-output "resolved_app_backend_url" {
-  description = "URL do NLB interno da aplicacao, resolvida do state de mechanical-hub-infra."
-  value       = local.application_base_url
+output "resolved_app_backend_urls" {
+  description = "URLs base de cada servico no NLB interno (app_backend_base_urls), resolvidas do state de mechanical-hub-infra."
+  value       = local.app_backend_base_urls
 }
 
 # --- Observabilidade (RFC-0004, etapa 3) --------------------------------------
