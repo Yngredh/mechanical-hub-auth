@@ -95,7 +95,8 @@ jobs:
         working-directory: ${{ env.TF_DIR }}
         env:
           TF_VAR_lambda_execution_role_arn: ${{ secrets.LAB_ROLE_ARN }}
-          # Rede e endpoint do banco vem dos states remotos (ADR-0002), nao de
+          # Rede, URLs dos servicos (app_backend_base_urls) e banco do orders
+          # (auth_database) vem dos states remotos (ADR-0002), nao de
           # secrets preenchidos a mao.
           TF_VAR_infra_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
           TF_VAR_database_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
@@ -104,10 +105,12 @@ jobs:
         run: terraform plan -input=false -out=tfplan
 
       - name: Terraform apply
+        id: apply
         working-directory: ${{ env.TF_DIR }}
         env:
           TF_VAR_lambda_execution_role_arn: ${{ secrets.LAB_ROLE_ARN }}
-          # Rede e endpoint do banco vem dos states remotos (ADR-0002), nao de
+          # Rede, URLs dos servicos (app_backend_base_urls) e banco do orders
+          # (auth_database) vem dos states remotos (ADR-0002), nao de
           # secrets preenchidos a mao.
           TF_VAR_infra_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
           TF_VAR_database_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
@@ -125,3 +128,28 @@ jobs:
         run: |
           API_BASE_URL="$(terraform -chdir=${{ env.TF_DIR }} output -raw api_base_url)" \
             bash scripts/smoke-test.sh
+
+      - name: Publicar outputs
+        # A URL do webhook muda a cada recriacao do API Gateway (reset do Lab) e
+        # precisa ser reconfigurada a mao no painel do Mercado Pago.
+        # Roda mesmo com o smoke test falhando: a URL do webhook continua util.
+        if: ${{ !cancelled() && steps.apply.outcome == 'success' }}
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          {
+            echo "## Mechanical Hub Auth"
+            echo
+            echo "| Output | Valor |"
+            echo "|---|---|"
+            echo "| \`api_base_url\` | $(terraform output -raw api_base_url) |"
+            echo "| \`login_url\` | $(terraform output -raw login_url) |"
+            echo "| \`webhook_url\` | $(terraform output -raw webhook_url) |"
+            echo
+            echo "> Configure \`webhook_url\` no painel do Mercado Pago (notificacoes de Orders) se a API foi recriada."
+            echo
+            echo "### Backends resolvidos do mechanical-hub-infra (\`app_backend_base_urls\`)"
+            echo
+            echo '```json'
+            terraform output -json resolved_app_backend_urls
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
