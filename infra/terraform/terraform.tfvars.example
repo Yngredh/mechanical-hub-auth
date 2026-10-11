@@ -23,9 +23,9 @@ database_state_bucket = "mechanical-hub-tfstate"
 #
 # vpc_id                = "vpc-0123456789abcdef0"
 # vpc_subnet_ids        = ["subnet-aaaa1111", "subnet-bbbb2222"]
-# database_host         = "mechanical-hub.abcdefghijkl.us-east-1.rds.amazonaws.com"
+# database_host         = "mechanical-hub-orders-prod.abcdefghijkl.us-east-1.rds.amazonaws.com"
 # database_port         = 5432
-# database_name         = "mechanical_hub"
+# database_name         = "mechanical_hub_orders"
 # database_egress_cidrs = ["10.0.0.0/16"]
 
 # O security group das funcoes e criado por este repositorio (ADR-0002) --

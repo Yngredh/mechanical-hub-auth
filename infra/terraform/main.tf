@@ -78,15 +78,20 @@ locals {
 
   subnet_ids = length(var.vpc_subnet_ids) > 0 ? var.vpc_subnet_ids : data.terraform_remote_state.infra.outputs.private_subnet_ids
 
-  # O output rds_endpoint pode vir como "host:porta" (formato do atributo
-  # `endpoint` do aws_db_instance) ou so o host (`address`). O split cobre os
-  # dois casos: sem ele, o driver do Postgres tentaria resolver "host:5432"
-  # como nome de maquina e a conexao falharia.
-  database_host = var.database_host != "" ? var.database_host : split(":", data.terraform_remote_state.database.outputs.rds_endpoint)[0]
+  # Fase 4: um RDS por servico. O login le users/profiles no banco do orders,
+  # publicado pelo mechanical-hub-database como auth_database
+  # ({ endpoint, port, db_name }), que substitui os antigos rds_*.
+  auth_database = data.terraform_remote_state.database.outputs.auth_database
 
-  database_port = var.database_port != null ? var.database_port : data.terraform_remote_state.database.outputs.rds_port
+  # O endpoint e publicado so com o host, mas o split continua cobrindo o
+  # formato "host:porta" (atributo `endpoint` do aws_db_instance): sem ele, o
+  # driver do Postgres tentaria resolver "host:5432" como nome de maquina e a
+  # conexao falharia.
+  database_host = var.database_host != "" ? var.database_host : split(":", local.auth_database.endpoint)[0]
 
-  database_name = var.database_name != "" ? var.database_name : data.terraform_remote_state.database.outputs.rds_db_name
+  database_port = var.database_port != null ? var.database_port : local.auth_database.port
+
+  database_name = var.database_name != "" ? var.database_name : local.auth_database.db_name
 
   # NLB interno da aplicacao, provisionado pelo mechanical-hub-infra
   # (modules/app-lb) -- nao pelo Kubernetes. O AWS Load Balancer Controller
