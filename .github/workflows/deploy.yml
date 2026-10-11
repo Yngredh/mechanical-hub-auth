@@ -115,35 +115,13 @@ jobs:
           TF_VAR_token_signing_key: ${{ secrets.TOKEN_SIGNING_KEY }}
         run: terraform apply -input=false -auto-approve tfplan
 
-      - name: Smoke test do login
-        working-directory: ${{ env.TF_DIR }}
+      - name: Smoke test
+        # Login, rota protegida com e sem token e webhook sem assinatura
+        # (401 vindo do billing). Ver scripts/smoke-test.sh. Pressupoe os 4
+        # servicos com targets saudaveis no NLB.
         env:
           SMOKE_CPF: ${{ secrets.SMOKE_TEST_CPF }}
           SMOKE_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
         run: |
-          LOGIN_URL="$(terraform output -raw login_url)"
-          echo "Login: ${LOGIN_URL}"
-
-          # 1) Credencial invalida deve responder 401 (prova que a funcao subiu
-          #    e alcanca o banco -- 500 aqui indicaria falha de conexao).
-          status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${LOGIN_URL}" \
-            -H 'Content-Type: application/json' \
-            -d '{"cpf":"52998224725","password":"senha-propositalmente-errada"}')
-          if [ "${status}" != "401" ] && [ "${status}" != "429" ]; then
-            echo "Esperado 401/429 para credencial invalida, recebido ${status}"
-            exit 1
-          fi
-
-          # 2) Credencial valida deve devolver token, se o secret estiver configurado.
-          if [ -n "${SMOKE_CPF}" ]; then
-            token=$(curl -s -X POST "${LOGIN_URL}" \
-              -H 'Content-Type: application/json' \
-              -d "{\"cpf\":\"${SMOKE_CPF}\",\"password\":\"${SMOKE_PASSWORD}\"}" \
-              | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')
-
-            if [ -z "${token}" ]; then
-              echo "Login com credencial valida nao devolveu accessToken"
-              exit 1
-            fi
-            echo "Login validado com sucesso"
-          fi
+          API_BASE_URL="$(terraform -chdir=${{ env.TF_DIR }} output -raw api_base_url)" \
+            bash scripts/smoke-test.sh
